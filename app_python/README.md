@@ -155,6 +155,29 @@ The application can be configured using the following environment variables:
 | `PORT` | `5000` | Port number to listen on |
 | `DEBUG` | `False` | Enable debug mode (auto-reload, verbose logging) |
 
+## Docker
+
+Build the image locally (from `app_python/`):
+
+```bash
+docker build -t <image-name> .
+```
+
+Run a container with port mapping:
+
+```bash
+docker run -p <host-port>:5000 <image-name>
+```
+
+Pull and run from Docker Hub (after publishing):
+
+```bash
+docker pull <docker-hub-username>/<repository-name>:<tag>
+docker run -p <host-port>:5000 <docker-hub-username>/<repository-name>:<tag>
+```
+
+The app listens on port 5000 inside the container. Map it to a host port (e.g. `-p 8080:5000`) to access endpoints from the host.
+
 ## Testing the API
 
 ### Using curl
@@ -176,13 +199,16 @@ curl http://localhost:5000/ | python -m json.tool
 app_python/
 ├── app.py                    # Main application
 ├── requirements.txt          # Dependencies
-├── .gitignore               # Git ignore rules
-├── README.md                # This file
-├── tests/                   # Unit tests (Lab 3)
+├── Dockerfile                # Container image definition
+├── .dockerignore             # Build context exclusions
+├── .gitignore                # Git ignore rules
+├── README.md                 # This file
+├── tests/                    # Unit tests (Lab 3)
 │   └── __init__.py
-└── docs/                    # Lab documentation
-    ├── LAB01.md            # Lab submission
-    └── screenshots/        # Proof of work
+└── docs/                     # Lab documentation
+    ├── LAB01.md              # Lab 1 submission
+    ├── LAB02.md              # Lab 2 submission
+    └── screenshots/          # Proof of work
 ```
 
 ## Development
