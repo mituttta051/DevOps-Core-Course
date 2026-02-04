@@ -1,0 +1,12 @@
+.git
+.gitignore
+*.md
+docs
+.vscode
+.idea
+*.test
+*.out
+vendor
+go.work
+.DS_Store
+*.log
