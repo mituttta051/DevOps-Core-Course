@@ -1,3 +1,4 @@
+// DevOps Info Service — Go implementation (Lab 3 CI).
 package main
 
 import (
