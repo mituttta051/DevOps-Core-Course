@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -193,7 +194,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusNotFound)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"error":   "Not Found",
 		"message": "Endpoint does not exist",
 		"path":    r.URL.Path,
@@ -203,7 +204,7 @@ func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 func methodNotAllowedHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusMethodNotAllowed)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"error":   "Method Not Allowed",
 		"message": fmt.Sprintf("Method %s is not allowed for this endpoint", r.Method),
 		"path":    r.URL.Path,
@@ -243,7 +244,7 @@ func main() {
 		<-sigint
 
 		log.Println("Shutting down server...")
-		if err := server.Shutdown(nil); err != nil {
+		if err := server.Shutdown(context.Background()); err != nil {
 			log.Fatalf("Server shutdown error: %v", err)
 		}
 	}()
