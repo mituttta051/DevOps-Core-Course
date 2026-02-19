@@ -1,5 +1,8 @@
 # DevOps Info Service
 
+[![Python CI](https://github.com/mituttta051/DevOps-Core-Course/actions/workflows/python-ci.yml/badge.svg)](https://github.com/mituttta051/DevOps-Core-Course/actions/workflows/python-ci.yml)
+[![codecov](https://codecov.io/gh/mituttta051/DevOps-Core-Course/branch/master/graph/badge.svg)](https://codecov.io/gh/mituttta051/DevOps-Core-Course)
+
 A production-ready Python web service providing comprehensive information about itself and its runtime environment. Built with FastAPI for modern async performance and automatic API documentation.
 
 ## Overview
@@ -35,6 +38,7 @@ The DevOps Info Service is a RESTful API that reports detailed system informatio
 4. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
+   pip install -r requirements-dev.txt
    ```
 
 ## Running the Application
@@ -178,9 +182,26 @@ docker run -p <host-port>:5000 <docker-hub-username>/<repository-name>:<tag>
 
 The app listens on port 5000 inside the container. Map it to a host port (e.g. `-p 8080:5000`) to access endpoints from the host.
 
-## Testing the API
+## Testing
 
-### Using curl
+### Run unit tests
+
+From the `app_python` directory:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+Or with coverage:
+
+```bash
+pytest --cov=app --cov-report=term-missing
+```
+
+Tests cover `GET /` and `GET /health`: response status, JSON structure, required fields, and error cases (e.g. 404).
+
+### Using curl (manual API testing)
 
 ```bash
 # Main endpoint
@@ -204,7 +225,10 @@ app_python/
 ├── .gitignore                # Git ignore rules
 ├── README.md                 # This file
 ├── tests/                    # Unit tests (Lab 3)
-│   └── __init__.py
+│   ├── __init__.py
+│   └── test_app.py
+├── requirements-dev.txt      # Dev dependencies (pytest, ruff, etc.)
+├── pytest.ini                # Pytest and coverage config
 └── docs/                     # Lab documentation
     ├── LAB01.md              # Lab 1 submission
     ├── LAB02.md              # Lab 2 submission
