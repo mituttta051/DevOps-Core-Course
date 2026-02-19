@@ -1,15 +1,7 @@
-test
-.DS_Store
-
 *.tfstate
 *.tfstate.*
 .terraform/
 terraform.tfvars
 *.tfvars
 .terraform.lock.hcl
-*.pem
-*.key
 credentials
-pulumi/venv/
-Pulumi.*.yaml
-!pulumi/Pulumi.yaml
