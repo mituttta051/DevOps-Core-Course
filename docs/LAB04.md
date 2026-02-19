@@ -302,87 +302,6 @@ The resources in the stack have been deleted.
 
 ---
 
-## Bonus: IaC CI/CD (Part 1)
-
-Workflow: `.github/workflows/terraform-ci.yml`.
-
-- **Triggers:** `pull_request` и `push` по путям `terraform/**` и `.github/workflows/terraform-ci.yml`.
-- **Steps:** checkout → Setup Terraform → Setup TFLint → terraform fmt -check → terraform init → terraform validate → tflint (в каталоге terraform/).
-
-**Path filters:** только изменения в Terraform и самом workflow запускают проверки.
-
-**tflint:** используется плагин "terraform" (generic). При добавлении провайдер-специфичного плагина (например, yandex) его можно включить в `.tflint.hcl`.
-
-**Example workflow run (Terraform CI):**
-```
-Run hashicorp/setup-terraform@v3
-  terraform_version: 1.9.0
-  terraform_wrapper: false
-Terraform 1.9.0 has been successfully installed
-
-Run terraform-linters/setup-tflint@v4
-  tflint_version: latest
-TFLint has been successfully installed
-
-Run tflint --init
-Plugin "terraform" has been installed
-
-Run terraform fmt -check -recursive
-
-Run terraform init -backend=false
-Initializing provider plugins...
-- Finding yandex-cloud/yandex versions matching ">= 0.0"...
-- Installing yandex-cloud/yandex v0.131.0...
-- Installed yandex-cloud/yandex v0.131.0 (unauthenticated)
-Terraform has been successfully initialized!
-
-Run terraform validate
-Success! The configuration is valid.
-
-Run tflint --format compact
-```
-
----
-
-## Bonus: GitHub Repository Import (Part 2)
-
-**Goal:** Управлять существующим репозиторием курса через Terraform (import).
-
-**Process:**
-1. В каталоге `terraform-github/`: provider GitHub, ресурс `github_repository` с именем репозитория (например DevOps-Core-Course), параметры (description, visibility, has_issues, has_wiki и т.д.).
-2. Выполнить: `terraform import github_repository.course_repo <repo_name>` (repo_name без владельца, как в GitHub API).
-3. Запустить `terraform plan` и подправить конфиг так, чтобы план показывал "No changes".
-4. Дальнейшие изменения настроек репозитория — через изменение .tf и `terraform apply`.
-
-**Why import matters:** Позволяет перевести уже созданные вручную ресурсы под управление IaC: версионирование, код-ревью, единообразие, восстановление из кода.
-
-**Example terminal output (import):**
-```
-$ terraform import github_repository.course_repo DevOps-Core-Course
-
-github_repository.course_repo: Importing from ID "DevOps-Core-Course"...
-github_repository.course_repo: Refreshing state... [id=DevOps-Core-Course]
-
-Import successful!
-
-The resources that were imported are shown above. These resources are now in
-your Terraform state and will henceforth be managed by Terraform.
-```
-
-После выравнивания конфига с реальным состоянием:
-```
-$ terraform plan
-
-github_repository.course_repo: Refreshing state... [id=DevOps-Core-Course]
-
-No changes. Your infrastructure matches the configuration.
-
-Terraform has compared your real infrastructure against your configuration
-and found no differences, so no changes are needed.
-```
-
----
-
 ## Инструкция: что проверить и доделать вручную
 
 ### Перед первым запуском
@@ -405,11 +324,6 @@ and found no differences, so no changes are needed.
      - `pulumi config set allowed_ssh_cidr "x.x.x.x/32"`  
      - `pulumi config set ssh_public_key "$(cat ~/.ssh/id_rsa.pub)"`  
    - Файлы `Pulumi.*.yaml` с секретами не коммитить (должны быть в `.gitignore`).
-
-3. **Bonus: GitHub Import**  
-   - Создать [Personal Access Token](https://github.com/settings/tokens) с правами `repo`.  
-   - В каталоге `terraform-github/` задать токен: через `terraform.tfvars` (не коммитить) или `export TF_VAR_github_token=...`.  
-   - При необходимости поправить в `variables.tf` имя репозитория и описание под свой форк/репо.
 
 ### Проверка Terraform
 
@@ -434,21 +348,6 @@ and found no differences, so no changes are needed.
 
 - В `docs/LAB04.md`: заполнить секцию **5. Lab 5 Preparation & Cleanup** — выбрать, оставляете ли VM для Lab 5 (Terraform или Pulumi) или уничтожаете всё; при уничтожении — вставить реальные выводы `terraform destroy` и/или `pulumi destroy`.  
 - Подставить реальные (обезличенные) выводы команд и публичный IP там, где оставлены плейсхолдеры.
-
-### Проверка бонуса: Terraform CI
-
-- Убедиться, что в репозитории есть `.github/workflows/terraform-ci.yml`.  
-- Сделать PR с изменением файлов в `terraform/**` (или самого workflow) — workflow «Terraform CI» должен запуститься.  
-- Проверить, что проходят шаги: fmt -check, init, validate, tflint.  
-- При необходимости установить tflint локально (`brew install tflint` или [официальная инструкция](https://github.com/terraform-linters/tflint)) и выполнить `tflint --init` и `tflint` в `terraform/`.
-
-### Проверка бонуса: GitHub Import
-
-- `cd terraform-github && terraform init`.  
-- Добавить ресурс `github_repository` в конфиг (уже добавлен в `main.tf`), убедиться, что имя репозитория совпадает с тем, что импортируете.  
-- Выполнить: `terraform import github_repository.course_repo <имя_репозитория>` (например `DevOps-Core-Course` для репо в текущем аккаунте).  
-- `terraform plan` — подправить конфиг (description, has_issues, has_wiki и т.д.), пока план не станет «No changes».  
-- Для сдачи: кратко описать процесс импорта и вставить вывод команды `terraform import` в документацию.
 
 ### Перед коммитом и PR
 
