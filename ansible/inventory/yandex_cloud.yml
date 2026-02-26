@@ -1,0 +1,15 @@
+plugin: yandex.cloud.yandex_compute
+
+auth_kind: serviceaccountfile
+service_account_file: ~/.yc/key.json
+folder_id: "{{ lookup('env', 'YC_FOLDER_ID') }}"
+
+filters:
+  - status == "RUNNING"
+
+groups:
+  webservers: "'lab' in name"
+
+compose:
+  ansible_host: network_interfaces[0].primary_v4_address.one_to_one_nat.address
+  ansible_user: "'ubuntu'"
