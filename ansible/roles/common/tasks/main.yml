@@ -1,14 +1,62 @@
 ---
-- name: Update apt cache
-  apt:
-    update_cache: yes
-    cache_valid_time: 3600
-
 - name: Install common packages
-  apt:
-    name: "{{ common_packages }}"
-    state: present
+  block:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      register: apt_update
 
-- name: Set timezone
-  community.general.timezone:
-    name: "{{ common_timezone }}"
+    - name: Install common packages
+      apt:
+        name: "{{ common_packages }}"
+        state: present
+
+    - name: Set timezone
+      community.general.timezone:
+        name: "{{ common_timezone }}"
+
+  rescue:
+    - name: Retry apt update on failure
+      command: apt-get update --fix-missing
+      changed_when: true
+
+    - name: Retry package installation
+      apt:
+        name: "{{ common_packages }}"
+        state: present
+
+  always:
+    - name: Log common role completion
+      copy:
+        content: "common-role-completed-{{ ansible_date_time.epoch }}"
+        dest: /tmp/ansible-common-complete
+        mode: '0644'
+
+  when: ansible_os_family == "Debian"
+  become: true
+  tags:
+    - packages
+    - common
+
+- name: Manage users
+  block:
+    - name: Ensure deploy user exists
+      user:
+        name: "{{ common_deploy_user }}"
+        system: yes
+        shell: /bin/bash
+        create_home: yes
+      when: common_deploy_user is defined
+
+  always:
+    - name: Log users block completion
+      copy:
+        content: "users-block-completed-{{ ansible_date_time.epoch }}"
+        dest: /tmp/ansible-users-complete
+        mode: '0644'
+
+  become: true
+  tags:
+    - users
+    - common
