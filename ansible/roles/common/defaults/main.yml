@@ -12,3 +12,4 @@ common_packages:
   - apt-transport-https
 
 common_timezone: Europe/Moscow
+common_deploy_user: deploy
