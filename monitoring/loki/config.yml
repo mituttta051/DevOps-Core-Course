@@ -1,0 +1,38 @@
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  path_prefix: /var/loki
+  storage:
+    tsdb:
+      dir: /var/loki/tsdb
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+storage_config:
+  tsdb_shipper:
+    active_index_directory: /var/loki/index
+    cache_location: /var/loki/index_cache
+  filesystem:
+    directory: /var/loki/chunks
+
+limits_config:
+  retention_period: 168h
+
+compactor:
+  working_directory: /var/loki/compactor
+  retention_enabled: true
+

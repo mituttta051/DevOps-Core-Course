@@ -5,6 +5,7 @@ Main application module
 import os
 import socket
 import platform
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Any
@@ -14,11 +15,27 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+class JSONFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        log_record = {
+            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        extra_fields = getattr(record, "extra_fields", {})
+        if isinstance(extra_fields, dict):
+            log_record.update(extra_fields)
+        return json.dumps(log_record, ensure_ascii=False)
+
+
+handler = logging.StreamHandler()
+handler.setFormatter(JSONFormatter())
+
+logger = logging.getLogger("devops-info-service")
+logger.setLevel(logging.INFO)
+logger.handlers = [handler]
+logger.propagate = False
 
 app = FastAPI(
     title="DevOps Info Service",
@@ -79,11 +96,14 @@ def get_request_info(request: Request) -> Dict[str, Any]:
 
 @app.get("/")
 async def index(request: Request) -> Dict[str, Any]:
-    logger.info(f"Request: {request.method} {request.url.path} from {request.client.host if request.client else 'unknown'}")
-    
+    request_info = get_request_info(request)
+    logger.info(
+        "Request received",
+        extra={"extra_fields": {"event": "request", **request_info}},
+    )
+
     system_info = get_system_info()
     runtime_info = get_runtime_info()
-    request_info = get_request_info(request)
     
     return {
         'service': {
@@ -108,6 +128,15 @@ async def index(request: Request) -> Dict[str, Any]:
 async def health() -> Dict[str, Any]:
     uptime = get_uptime()
     now = datetime.now(timezone.utc)
+    logger.info(
+        "Health check",
+        extra={
+            "extra_fields": {
+                "event": "health_check",
+                "uptime_seconds": uptime["seconds"],
+            }
+        },
+    )
     return {
         'status': 'healthy',
         'timestamp': now.isoformat().replace('+00:00', 'Z'),
@@ -117,7 +146,18 @@ async def health() -> Dict[str, Any]:
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    logger.warning(f"HTTP {exc.status_code}: {exc.detail} for {request.url.path}")
+    request_info = get_request_info(request)
+    logger.warning(
+        "HTTP error",
+        extra={
+            "extra_fields": {
+                "event": "http_error",
+                "status_code": exc.status_code,
+                "detail": exc.detail,
+                **request_info,
+            }
+        },
+    )
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -130,7 +170,17 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    logger.warning(f"Validation error: {exc.errors()} for {request.url.path}")
+    request_info = get_request_info(request)
+    logger.warning(
+        "Validation error",
+        extra={
+            "extra_fields": {
+                "event": "validation_error",
+                "errors": exc.errors(),
+                **request_info,
+            }
+        },
+    )
     return JSONResponse(
         status_code=422,
         content={
@@ -143,7 +193,18 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unexpected error: {str(exc)}", exc_info=True)
+    request_info = get_request_info(request)
+    logger.error(
+        "Unexpected error",
+        exc_info=True,
+        extra={
+            "extra_fields": {
+                "event": "unexpected_error",
+                "error": str(exc),
+                **request_info,
+            }
+        },
+    )
     return JSONResponse(
         status_code=500,
         content={
@@ -155,7 +216,17 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 if __name__ == "__main__":
     import uvicorn
-    logger.info(f"Starting DevOps Info Service on {HOST}:{PORT}")
+    logger.info(
+        "Starting DevOps Info Service",
+        extra={
+            "extra_fields": {
+                "event": "startup",
+                "host": HOST,
+                "port": PORT,
+                "debug": DEBUG,
+            }
+        },
+    )
     uvicorn.run(
         "app:app",
         host=HOST,
