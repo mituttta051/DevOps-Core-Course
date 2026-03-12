@@ -66,6 +66,10 @@ sum by (level) (count_over_time({app=~"devops-.*"} | json [5m]))
 
 These queries are used in Explore and in the dashboard to quickly see the overall health of the services, request frequency, errors, and log level distribution.
 
+**Dashboard — all 4 panels with real data:**
+
+![](<Screenshot 2026-03-12 at 23.29.38.png>)
+
 ## Setup Guide
 
 1. Go to the monitoring stack directory:
@@ -81,15 +85,9 @@ docker compose up -d --build
 docker compose ps
 ```
 
-Example output of `docker compose ps`:
+All services running and healthy:
 
-```text
-NAME                       COMMAND                  SERVICE      STATUS              PORTS
-monitoring-loki-1          "/usr/bin/loki -con…"   loki         running (healthy)   0.0.0.0:3100->3100/tcp
-monitoring-promtail-1      "/usr/bin/promtail …"   promtail     running             9080/tcp
-monitoring-grafana-1       "/run.sh"               grafana      running (healthy)   0.0.0.0:3000->3000/tcp
-monitoring-app-python-1    "python -m uvicorn…"   app-python   running             0.0.0.0:8000->5000/tcp
-```
+![](<Screenshot 2026-03-12 at 23.14.30.png>)
 
 3. Check Loki and Promtail availability:
 
@@ -115,7 +113,11 @@ Login: username `admin`, password `admin123` (in a real environment this is set 
 5. Add the Loki data source:
    - Connections → Data sources → Add data source → Loki
    - URL: `http://loki:3100`
-   - Save & Test (the expected message is “Data source connected”).
+   - Save & Test (the expected message is "Data source connected").
+
+6. Open Explore, select Loki as data source, run `{job="docker"}` — logs from all containers:
+
+![](<Screenshot 2026-03-12 at 23.21.45.png>)
 
 ## Configuration
 
@@ -130,11 +132,25 @@ server:
 common:
   path_prefix: /var/loki
   storage:
-    tsdb:
-      dir: /var/loki/tsdb
+    filesystem:
+      chunks_directory: /var/loki/chunks
+  ring:
+    kvstore:
+      store: inmemory
+  replication_factor: 1
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
 ```
 
-Loki runs in TSDB mode with local `filesystem` object storage. This provides faster queries and lower memory usage compared to older schemas. In `limits_config`, `retention_period: 168h` is set, and the `compactor` section enables deletion of expired logs.
+Loki runs in TSDB mode with local `filesystem` object storage. This provides faster queries and lower memory usage compared to older schemas. In `limits_config`, `retention_period: 168h` is set, and the `compactor` section enables deletion of expired logs. The `ruler.storage.local.directory` is set to `/var/loki/rules` to satisfy the required ruler-storage module initialization in Loki 3.0.
 
 Fragment of the Promtail config (`promtail/config.yml`):
 
@@ -144,19 +160,23 @@ scrape_configs:
     docker_sd_configs:
       - host: unix:///var/run/docker.sock
         refresh_interval: 5s
+        filters:
+          - name: label
+            values: ["logging=promtail"]
     relabel_configs:
       - source_labels: ["__meta_docker_container_name"]
-        target_label: "container"
         regex: "/(.*)"
+        target_label: "container"
         replacement: "$1"
+      - source_labels: ["__meta_docker_container_label_app"]
+        target_label: "app"
       - source_labels: ["__meta_docker_container_label_logging"]
         target_label: "logging"
-      - action: keep
-        source_labels: ["__meta_docker_container_label_logging"]
-        regex: "promtail"
+      - replacement: "docker"
+        target_label: "job"
 ```
 
-Promtail uses Docker service discovery to automatically detect containers and filters only those that have the `logging=promtail` label. The container name is stored in the `container` label, which is convenient for further filtering in LogQL.
+Promtail uses Docker service discovery with a `filters` directive to query only containers that have the `logging=promtail` Docker label — this filters at the Docker API level and prevents unlabeled containers from producing empty-label log streams. The container name is stored in the `container` label, and the `app` label is extracted from the Docker container label `app`.
 
 ## Application Logging
 
@@ -183,7 +203,15 @@ Logs are written to stdout, so Docker and Promtail can see them. For requests to
 {"timestamp":"2026-03-12T18:05:31.123456Z","level":"INFO","logger":"devops-info-service","message":"Request received","event":"request","client_ip":"127.0.0.1","user_agent":"curl/8.6.0","method":"GET","path":"/"}
 ```
 
+JSON log output from the container (`docker compose logs app-python`):
+
+![](<Screenshot 2026-03-12 at 23.19.04.png>)
+
 Thanks to the structured format, it is possible to use `| json` in LogQL and filter by individual fields (`method`, `event`, `level`, etc.).
+
+Logs from the application parsed in Grafana Explore (`{app="devops-python"} | json`):
+
+![](<Screenshot 2026-03-12 at 23.23.45.png>)
 
 ## Production Config
 
@@ -191,6 +219,7 @@ The `docker-compose.yml` file defines resource limits and health checks. Example
 
 ```yaml
 loki:
+  user: "0"
   deploy:
     resources:
       limits:
@@ -200,14 +229,18 @@ loki:
         cpus: "0.5"
         memory: 512M
   healthcheck:
-    test: ["CMD-SHELL", "curl -f http://localhost:3100/ready || exit 1"]
-    interval: 10s
+    test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
+    interval: 15s
     timeout: 5s
     retries: 5
-    start_period: 10s
+    start_period: 30s
 ```
 
 Similar limits are set for Grafana, Promtail, and the application. Anonymous authorization is disabled in Grafana (`GF_AUTH_ANONYMOUS_ENABLED=false`), so access is allowed only by username and password. In production, these values should come from `.env` files or secrets, not be hardcoded in the Compose file.
+
+Grafana login page (anonymous access disabled):
+
+![](<Screenshot 2026-03-12 at 23.15.01.png>)
 
 ## Testing
 
@@ -248,5 +281,7 @@ shows log lines with the `method`, `path`, and `client_ip` fields. For errors, f
 Several problems came up during setup:
 
 - At first, Promtail did not see the application containers because the `logging=promtail` label was missing. After adding labels to the `app-python` service, the logs appeared in Loki.
-- In the Loki configuration, consistency between `schema_config` and `storage_config` is important. An incorrect `schema` caused a startup error, so schema `v13` with TSDB storage and `filesystem` was chosen.
-- During the first Grafana launch, anonymous authorization was enabled, which is convenient for debugging but insecure. In the production part of the Compose file, anonymous access is disabled, and login is done through an administrator account.
+- In the Loki 3.0 configuration, `common.storage` requires the `filesystem` key, not `tsdb` — TSDB is a schema type set in `schema_config`, not a storage backend. Using `tsdb` inside `common.storage` caused a parse error.
+- Loki 3.0 always initializes the `ruler-storage` module and requires `ruler.storage.local.directory` to be set even when the Ruler feature is not used. Adding the `ruler` section with a local directory resolved the startup failure.
+- Promtail was sending batches with no labels, causing `400: at least one label pair is required per stream`. The root cause was that all 4 containers were discovered and some produced empty-label streams before `action: keep` filtered them. The fix was to move filtering to `filters` inside `docker_sd_configs`, which prevents unlabeled containers from being discovered at all.
+- The Loki image does not include `curl`, so the healthcheck using `curl -f` always failed. Replacing it with `wget --no-verbose --tries=1 --spider` resolved the `(unhealthy)` status.

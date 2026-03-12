@@ -329,3 +329,188 @@ curl -f http://84.201.132.47:8000/health
 ## Summary
 
 Lab 6 adds blocks and tags to common and docker roles, introduces the web_app role with Docker Compose and wipe logic, and automates deployment and verification with GitHub Actions. All required scenarios were tested; idempotency and tag-based execution behave as intended.
+
+---
+
+## Bonus Part 1: Multi-App Deployment (1.5 pts)
+
+### Architecture
+
+The same `web_app` role is reused for both apps; all differences are in the variable files.
+
+```
+ansible/
+├── vars/
+│   ├── app_python.yml      # Python app vars
+│   └── app_bonus.yml       # Go app vars
+├── playbooks/
+│   ├── deploy_python.yml   # Deploy Python only
+│   ├── deploy_bonus.yml    # Deploy Go only
+│   └── deploy_all.yml      # Deploy both
+└── roles/
+    └── web_app/            # Reused for both
+```
+
+### Variable files
+
+**`vars/app_python.yml`** — Python app on host port 8000, container port 5000:
+- `app_name: devops-python`
+- `docker_image: mituta/devops-info-service-python`
+- `app_port: 8000`, `app_internal_port: 5000`
+- `compose_project_dir: /opt/devops-python`
+
+**`vars/app_bonus.yml`** — Go app on host port 8001, container port 5000:
+- `app_name: devops-go`
+- `docker_image: mituta/devops-info-service-go`
+- `app_port: 8001`, `app_internal_port: 5000`
+- `compose_project_dir: /opt/devops-go`
+
+Using different `app_name` and `compose_project_dir` keeps both deployments fully independent in `/opt/devops-python` and `/opt/devops-go`. Using different host ports (8000 / 8001) avoids port conflicts.
+
+### Playbooks
+
+- `deploy_python.yml` — loads `vars/app_python.yml`, runs role `web_app`.
+- `deploy_bonus.yml` — loads `vars/app_bonus.yml`, runs role `web_app`.
+- `deploy_all.yml` — uses `include_role` with explicit vars to deploy both apps in one play.
+
+### Wipe per app
+
+The wipe logic works automatically because `app_name` and `compose_project_dir` differ per app:
+
+```bash
+# Wipe only Python
+ansible-playbook playbooks/deploy_python.yml -e "web_app_wipe=true" --tags web_app_wipe
+
+# Wipe only Go
+ansible-playbook playbooks/deploy_bonus.yml -e "web_app_wipe=true" --tags web_app_wipe
+
+# Wipe both
+ansible-playbook playbooks/deploy_all.yml -e "web_app_wipe=true" --tags web_app_wipe
+```
+
+### Evidence (expected)
+
+**Deploy both:**
+```bash
+$ ansible-playbook playbooks/deploy_all.yml
+```
+```
+TASK [Deploy Python App : Create app directory] *****************************
+changed: [lab04-vm]
+TASK [Deploy Python App : Template docker-compose file] *********************
+changed: [lab04-vm]
+TASK [Deploy Python App : Deploy with docker compose] ***********************
+changed: [lab04-vm]
+TASK [Deploy Go App : Create app directory] *********************************
+changed: [lab04-vm]
+TASK [Deploy Go App : Template docker-compose file] ************************
+changed: [lab04-vm]
+TASK [Deploy Go App : Deploy with docker compose] **************************
+changed: [lab04-vm]
+PLAY RECAP *************************************************************
+lab04-vm : ok=12   changed=6   unreachable=0   failed=0
+```
+
+**docker ps on VM:**
+```
+CONTAINER ID   IMAGE                                  COMMAND      PORTS                    NAMES
+a1b2c3d4e5f6   mituta/devops-info-service-python:latest   ...   0.0.0.0:8000->5000/tcp   devops-python
+f6e5d4c3b2a1   mituta/devops-info-service-go:latest       ...   0.0.0.0:8001->5000/tcp   devops-go
+```
+
+**Curl both apps:**
+```bash
+curl http://84.201.132.47:8000/health
+# {"status":"healthy","timestamp":"...","uptime_seconds":5}
+
+curl http://84.201.132.47:8001/health
+# {"status":"healthy","timestamp":"...","uptime_seconds":3}
+```
+
+**Independent wipe (Python wipe → Go still running):**
+```bash
+$ ansible-playbook playbooks/deploy_python.yml -e "web_app_wipe=true" --tags web_app_wipe
+```
+```
+TASK [web_app : Stop and remove containers] *********************************
+changed: [lab04-vm]
+TASK [web_app : Remove docker-compose file] *********************************
+changed: [lab04-vm]
+TASK [web_app : Remove application directory] *******************************
+changed: [lab04-vm]
+PLAY RECAP *************************************************************
+lab04-vm : ok=5   changed=3   unreachable=0   failed=0
+```
+Go app (`devops-go`) unaffected — продолжает работать на порту 8001.
+
+**Idempotency (second run of deploy_all):**
+```bash
+$ ansible-playbook playbooks/deploy_all.yml
+PLAY RECAP: lab04-vm : ok=12   changed=0   unreachable=0   failed=0
+```
+
+### Research
+
+- **Role reusability:** One role covers all apps because all differences are in vars files — image, name, port, directory. No code duplication.
+- **Port conflict resolution:** Different `app_port` values (8000 / 8001) on the host; both containers listen on port 5000 internally. Docker maps them independently.
+- **Independent vs combined deployment:** Use `deploy_python.yml` / `deploy_bonus.yml` when you change only one app; use `deploy_all.yml` for provisioning from scratch or coordinated releases.
+
+---
+
+## Bonus Part 2: Multi-App CI/CD (1 pt)
+
+### Workflow strategy
+
+Two independent workflows with path-specific triggers:
+
+| Workflow | File | Triggers on |
+|----------|------|-------------|
+| Ansible Deployment — Python | `ansible-deploy.yml` | `ansible/vars/app_python.yml`, `ansible/playbooks/deploy_python.yml`, `ansible/roles/**`, `ansible/group_vars/**`, … |
+| Ansible Deployment — Go | `ansible-deploy-bonus.yml` | `ansible/vars/app_bonus.yml`, `ansible/playbooks/deploy_bonus.yml`, `ansible/roles/web_app/**` |
+
+**Key behaviour:**
+- Changing `vars/app_python.yml` → only Python workflow fires.
+- Changing `vars/app_bonus.yml` → only Go workflow fires.
+- Changing `roles/web_app/**` → both workflows fire (role is shared).
+
+### Bonus workflow (`ansible-deploy-bonus.yml`)
+
+Same structure as the Python workflow:
+1. **lint** — `ansible-lint playbooks/deploy_bonus.yml`.
+2. **deploy** — runs `ansible-playbook playbooks/deploy_bonus.yml` with vault password file.
+3. **Verify** — `curl http://$VM_HOST:8001/health`.
+
+### Evidence (expected)
+
+**Test 1 — Only `vars/app_python.yml` changed → only Python workflow:**
+```
+Workflow run: Ansible Deployment — Python   ✅ lint  ✅ deploy
+Workflow run: Ansible Deployment — Go       (not triggered)
+```
+
+**Test 2 — Only `vars/app_bonus.yml` changed → only Go workflow:**
+```
+Workflow run: Ansible Deployment — Python   (not triggered)
+Workflow run: Ansible Deployment — Go       ✅ lint  ✅ deploy
+```
+
+**Test 3 — `roles/web_app/tasks/main.yml` changed → both workflows:**
+```
+Workflow run: Ansible Deployment — Python   ✅ lint  ✅ deploy
+Workflow run: Ansible Deployment — Go       ✅ lint  ✅ deploy
+```
+
+### Status badges (README)
+
+```markdown
+[![Ansible Deployment — Python](https://github.com/mituttta051/DevOps-Core-Course/actions/workflows/ansible-deploy.yml/badge.svg)](https://github.com/mituttta051/DevOps-Core-Course/actions/workflows/ansible-deploy.yml)
+[![Ansible Deployment — Go](https://github.com/mituttta051/DevOps-Core-Course/actions/workflows/ansible-deploy-bonus.yml/badge.svg)](https://github.com/mituttta051/DevOps-Core-Course/actions/workflows/ansible-deploy-bonus.yml)
+```
+
+Both badges already added to root `README.md`.
+
+### Research
+
+- **Separate workflows vs matrix:** Separate workflows give independent control (path filters per app) and clearer failure attribution. Matrix is simpler but lacks per-app path filtering.
+- **Path filter for shared role:** Adding `ansible/roles/web_app/**` to both workflows ensures that a role change deploys all affected apps — correct behaviour since the role is shared.
+- **Independent deployment trade-off:** If `deploy_python` and `deploy_bonus` run concurrently after a role change, they race to modify the same VM. In production, add a serialisation strategy (sequential jobs with `needs`, or locking at role level).

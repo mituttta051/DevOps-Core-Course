@@ -6,11 +6,12 @@ server:
 common:
   path_prefix: /var/loki
   storage:
-    tsdb:
-      dir: /var/loki/tsdb
+    filesystem:
+      chunks_directory: /var/loki/chunks
   ring:
     kvstore:
       store: inmemory
+  replication_factor: 1
 
 schema_config:
   configs:
@@ -24,8 +25,8 @@ schema_config:
 
 storage_config:
   tsdb_shipper:
-    active_index_directory: /var/loki/index
-    cache_location: /var/loki/index_cache
+    active_index_directory: /var/loki/tsdb-index
+    cache_location: /var/loki/tsdb-cache
   filesystem:
     directory: /var/loki/chunks
 
@@ -35,4 +36,10 @@ limits_config:
 compactor:
   working_directory: /var/loki/compactor
   retention_enabled: true
+  delete_request_store: filesystem
 
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /var/loki/rules
