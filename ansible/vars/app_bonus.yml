@@ -1,0 +1,10 @@
+---
+app_name: devops-go
+docker_image: mituta/devops-info-service-go
+docker_tag: latest
+app_port: 8001
+app_internal_port: 5000
+compose_project_dir: "/opt/{{ app_name }}"
+app_env:
+  HOST: "0.0.0.0"
+  PORT: "5000"
