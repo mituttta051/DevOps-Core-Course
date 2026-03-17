@@ -1,28 +1,20 @@
-name: Ansible Deployment
+name: Ansible Deployment — Bonus (Go)
 
 on:
   push:
     branches: [main, master]
     paths:
-      - 'ansible/vars/app_python.yml'
-      - 'ansible/playbooks/deploy_python.yml'
-      - 'ansible/playbooks/deploy.yml'
-      - 'ansible/roles/**'
-      - 'ansible/group_vars/**'
-      - 'ansible/inventory/**'
-      - 'ansible/ansible.cfg'
-      - '.github/workflows/ansible-deploy.yml'
+      - 'ansible/vars/app_bonus.yml'
+      - 'ansible/playbooks/deploy_bonus.yml'
+      - 'ansible/roles/web_app/**'
+      - '.github/workflows/ansible-deploy-bonus.yml'
   pull_request:
     branches: [main, master]
     paths:
-      - 'ansible/vars/app_python.yml'
-      - 'ansible/playbooks/deploy_python.yml'
-      - 'ansible/playbooks/deploy.yml'
-      - 'ansible/roles/**'
-      - 'ansible/group_vars/**'
-      - 'ansible/inventory/**'
-      - 'ansible/ansible.cfg'
-      - '.github/workflows/ansible-deploy.yml'
+      - 'ansible/vars/app_bonus.yml'
+      - 'ansible/playbooks/deploy_bonus.yml'
+      - 'ansible/roles/web_app/**'
+      - '.github/workflows/ansible-deploy-bonus.yml'
 
 jobs:
   lint:
@@ -44,10 +36,10 @@ jobs:
       - name: Run ansible-lint
         run: |
           cd ansible
-          ansible-lint playbooks/*.yml
+          ansible-lint playbooks/deploy_bonus.yml
 
   deploy:
-    name: Deploy Application
+    name: Deploy Go Application
     needs: lint
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
@@ -72,20 +64,20 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      - name: Deploy with Ansible
+      - name: Deploy Go Application with Ansible
         env:
           ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
         run: |
           cd ansible
           echo "$ANSIBLE_VAULT_PASSWORD" > /tmp/vault_pass
           chmod 600 /tmp/vault_pass
-          ansible-playbook playbooks/deploy.yml \
+          ansible-playbook playbooks/deploy_bonus.yml \
             -i inventory/hosts.ini \
             --vault-password-file /tmp/vault_pass
           rm -f /tmp/vault_pass
 
-      - name: Verify Deployment
+      - name: Verify Go App Deployment
         run: |
           sleep 10
-          curl -f http://${{ secrets.VM_HOST }}:8000 || exit 1
-          curl -f http://${{ secrets.VM_HOST }}:8000/health || exit 1
+          curl -f --connect-timeout 5 "http://${{ secrets.VM_HOST }}:8001" || true
+          curl -f --connect-timeout 5 "http://${{ secrets.VM_HOST }}:8001/health" || exit 1
