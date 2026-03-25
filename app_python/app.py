@@ -7,13 +7,16 @@ import socket
 import platform
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Dict, Any
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
 class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
@@ -43,11 +46,63 @@ app = FastAPI(
     version="1.0.0"
 )
 
+http_requests_total = Counter(
+    "http_requests_total",
+    "Total HTTP requests",
+    ["method", "endpoint", "status_code"],
+)
+
+http_request_duration_seconds = Histogram(
+    "http_request_duration_seconds",
+    "HTTP request duration in seconds",
+    ["method", "endpoint"],
+)
+
+http_requests_in_progress = Gauge(
+    "http_requests_in_progress",
+    "HTTP requests currently being processed",
+)
+
+devops_info_endpoint_calls = Counter(
+    "devops_info_endpoint_calls",
+    "DevOps info service endpoint calls",
+    ["endpoint"],
+)
+
+devops_info_system_collection_seconds = Histogram(
+    "devops_info_system_collection_seconds",
+    "Time spent collecting system info",
+)
+
 HOST = os.getenv('HOST', '0.0.0.0')
 PORT = int(os.getenv('PORT', 5000))
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 START_TIME = datetime.now(timezone.utc)
+
+@app.middleware("http")
+async def prometheus_metrics_middleware(request: Request, call_next):
+    endpoint = request.url.path
+    method = request.method
+    start = time.perf_counter()
+    http_requests_in_progress.inc()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        http_requests_in_progress.dec()
+        duration = time.perf_counter() - start
+        http_requests_total.labels(method=method, endpoint=endpoint, status_code=str(status_code)).inc()
+        http_request_duration_seconds.labels(method=method, endpoint=endpoint).observe(duration)
+        if endpoint not in ("/metrics",):
+            devops_info_endpoint_calls.labels(endpoint=endpoint).inc()
+
+
+@app.get("/metrics")
+async def metrics() -> Response:
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 def get_system_info() -> Dict[str, Any]:
@@ -102,7 +157,9 @@ async def index(request: Request) -> Dict[str, Any]:
         extra={"extra_fields": {"event": "request", **request_info}},
     )
 
+    t0 = time.perf_counter()
     system_info = get_system_info()
+    devops_info_system_collection_seconds.observe(time.perf_counter() - t0)
     runtime_info = get_runtime_info()
     
     return {
