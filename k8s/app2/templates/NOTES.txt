@@ -1,0 +1,17 @@
+app2 has been installed.
+
+Release name: {{ .Release.Name }}
+Namespace:    {{ .Release.Namespace }}
+
+Get the application URL:
+{{- if eq .Values.service.type "NodePort" }}
+  export NODE_PORT=$(kubectl get svc {{ include "common.fullname" . }} -n {{ .Release.Namespace }} -o jsonpath='{.spec.ports[0].nodePort}')
+  export NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')
+  echo "http://$NODE_IP:$NODE_PORT"
+{{- else if eq .Values.service.type "LoadBalancer" }}
+  export SERVICE_IP=$(kubectl get svc {{ include "common.fullname" . }} -n {{ .Release.Namespace }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+  echo "http://$SERVICE_IP:{{ .Values.service.port }}"
+{{- else }}
+  kubectl port-forward svc/{{ include "common.fullname" . }} 8080:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+  echo "http://localhost:8080"
+{{- end }}
