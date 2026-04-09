@@ -17,3 +17,12 @@
 {{- define "devops-info-service.selectorLabels" -}}
 {{- include "common.selectorLabels" . }}
 {{- end }}
+
+{{- define "devops-info-service.envVars" -}}
+- name: APP_NAME
+  value: {{ include "devops-info-service.fullname" . }}
+- name: APP_ENV
+  value: {{ .Values.environment | default "production" }}
+- name: LOG_LEVEL
+  value: {{ .Values.logLevel | default "info" }}
+{{- end -}}
