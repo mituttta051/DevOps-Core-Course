@@ -8,6 +8,7 @@ import platform
 import json
 import logging
 import time
+import tempfile
 import threading
 from pathlib import Path
 from datetime import datetime, timezone
@@ -79,7 +80,7 @@ devops_info_system_collection_seconds = Histogram(
 HOST = os.getenv('HOST', '0.0.0.0')
 PORT = int(os.getenv('PORT', 5000))
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
-VISITS_FILE = os.getenv('VISITS_FILE', '/data/visits')
+VISITS_FILE = os.getenv('VISITS_FILE', os.path.join(tempfile.gettempdir(), 'visits'))
 
 START_TIME = datetime.now(timezone.utc)
 

@@ -13,6 +13,7 @@ COPY app.py .
 RUN mkdir -p /data && chown -R appuser:appuser /app /data
 USER appuser
 
+ENV VISITS_FILE=/data/visits
 EXPOSE 5000
 
 CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "5000"]
