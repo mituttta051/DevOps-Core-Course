@@ -2,7 +2,7 @@ replicaCount: 3
 
 image:
   repository: mituta/devops-info-service
-  tag: "lab02"
+  tag: "lab12"
   pullPolicy: IfNotPresent
 
 nameOverride: ""
@@ -70,3 +70,11 @@ vault:
   enabled: false
   role: "devops-info-service"
   secretPath: "secret/data/devops-info-service/config"
+
+environment: "production"
+logLevel: "info"
+
+persistence:
+  enabled: true
+  size: 100Mi
+  storageClass: ""

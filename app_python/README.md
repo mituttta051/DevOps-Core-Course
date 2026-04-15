@@ -126,6 +126,19 @@ Returns comprehensive service and system information.
 }
 ```
 
+### `GET /visits`
+
+Returns the current visit counter value. The counter increments on each request to `GET /`.
+
+**Response Example:**
+```json
+{
+  "visits": 42
+}
+```
+
+**Status Code:** `200 OK`
+
 ### `GET /health`
 
 Simple health check endpoint for monitoring and Kubernetes probes.
@@ -158,6 +171,18 @@ The application can be configured using the following environment variables:
 | `HOST` | `0.0.0.0` | Host address to bind the server |
 | `PORT` | `5000` | Port number to listen on |
 | `DEBUG` | `False` | Enable debug mode (auto-reload, verbose logging) |
+| `VISITS_FILE` | `/data/visits` | Path to the file storing the visit counter |
+
+## Docker Compose
+
+Run with persistent visit counter:
+
+```bash
+cd app_python
+docker compose up --build
+```
+
+The visit counter persists across container restarts via a mounted volume (`./data:/data`).
 
 ## Docker
 
