@@ -61,3 +61,12 @@ serviceAccount:
 
 autoscaling:
   enabled: false
+
+secrets:
+  DATABASE_USERNAME: "admin"
+  DATABASE_PASSWORD: "changeme"
+
+vault:
+  enabled: false
+  role: "devops-info-service"
+  secretPath: "secret/data/devops-info-service/config"
