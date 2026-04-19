@@ -353,13 +353,35 @@ argocd/devops-info-service-set-prod   prod  Synced  Healthy  Manual      lab13
 
 ## 6. Screenshots
 
-Add screenshots inside `k8s/screenshots/lab13/` and reference them here:
+### All applications
 
-- `argocd-apps-list.png` — ArgoCD UI showing all applications
-- `argocd-dev-healthy.png` — dev application details / tree view
-- `argocd-prod-synced.png` — prod application details / tree view
-- `argocd-self-heal.png` — activity log with a self-heal event
-- `argocd-appset.png` — ApplicationSet-generated Applications
+Main application + both ApplicationSet-generated apps (dev/prod) visible as tiles.
+
+![All applications](screenshots/lab13/argocd-apps-list.png)
+
+### Dev application — Healthy & Synced
+
+`devops-info-service-set-dev` tree view after a GitOps push (replicaCount 1 → 2, rev:1). Auto-sync is enabled and everything is green.
+
+![Dev healthy](screenshots/lab13/argocd-dev-healthy.png)
+
+### Prod application — Healthy & Synced
+
+`devops-info-service-set-prod` tree view. Auto-sync is **not** enabled; sync happens manually.
+
+![Prod synced](screenshots/lab13/argocd-prod-synced.png)
+
+### Self-heal in action
+
+Dev application right after out-of-band `kubectl set image` drift. Status flips to **OutOfSync / Syncing**, the Deployment shows rev:2 while the previous ReplicaSet is still around — ArgoCD self-heal is reverting the image tag back to the Git-declared value.
+
+![Self-heal](screenshots/lab13/argocd-self-heal.png)
+
+### ApplicationSet generated applications
+
+Filtered list (`search=devops-info-service-set`) showing both Applications produced by the `devops-info-service-set` ApplicationSet from the List generator (dev + prod elements).
+
+![ApplicationSet](screenshots/lab13/argocd-appset.png)
 
 ---
 
