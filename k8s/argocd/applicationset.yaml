@@ -38,7 +38,6 @@ spec:
       syncPolicy:
         syncOptions:
           - CreateNamespace=true
-          - ServerSideApply=true
   templatePatch: |
     {{- if eq .autoSync "true" }}
     spec:
