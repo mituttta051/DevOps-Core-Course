@@ -21,8 +21,8 @@ spec:
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- if or .Values.podAnnotations .Values.vault.enabled }}
       annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -36,7 +36,6 @@ spec:
           {{`DATABASE_PASSWORD={{ .Data.data.password }}`}}
           {{`{{- end -}}`}}
         {{- end }}
-      {{- end }}
     spec:
       serviceAccountName: {{ include "devops-info-service.fullname" . }}
       containers:
@@ -52,9 +51,27 @@ spec:
           envFrom:
             - secretRef:
                 name: {{ include "devops-info-service.fullname" . }}-secret
+            - configMapRef:
+                name: {{ include "devops-info-service.fullname" . }}-env
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
           readinessProbe:
             {{- toYaml .Values.readinessProbe | nindent 12 }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: /config
+            {{- if .Values.persistence.enabled }}
+            - name: data-volume
+              mountPath: /data
+            {{- end }}
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ include "devops-info-service.fullname" . }}-config
+        {{- if .Values.persistence.enabled }}
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: {{ include "devops-info-service.fullname" . }}-data
+        {{- end }}

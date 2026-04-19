@@ -8,6 +8,9 @@ import platform
 import json
 import logging
 import time
+import tempfile
+import threading
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, Any
 
@@ -77,8 +80,24 @@ devops_info_system_collection_seconds = Histogram(
 HOST = os.getenv('HOST', '0.0.0.0')
 PORT = int(os.getenv('PORT', 5000))
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
+VISITS_FILE = os.getenv('VISITS_FILE', os.path.join(tempfile.gettempdir(), 'visits'))
 
 START_TIME = datetime.now(timezone.utc)
+
+_visits_lock = threading.Lock()
+
+
+def _read_visits() -> int:
+    try:
+        return int(Path(VISITS_FILE).read_text().strip())
+    except (FileNotFoundError, ValueError):
+        return 0
+
+
+def _write_visits(count: int) -> None:
+    path = Path(VISITS_FILE)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(str(count))
 
 @app.middleware("http")
 async def prometheus_metrics_middleware(request: Request, call_next):
@@ -157,11 +176,15 @@ async def index(request: Request) -> Dict[str, Any]:
         extra={"extra_fields": {"event": "request", **request_info}},
     )
 
+    with _visits_lock:
+        visits = _read_visits() + 1
+        _write_visits(visits)
+
     t0 = time.perf_counter()
     system_info = get_system_info()
     devops_info_system_collection_seconds.observe(time.perf_counter() - t0)
     runtime_info = get_runtime_info()
-    
+
     return {
         'service': {
             'name': 'devops-info-service',
@@ -175,10 +198,17 @@ async def index(request: Request) -> Dict[str, Any]:
         'endpoints': [
             {'path': '/', 'method': 'GET', 'description': 'Service information'},
             {'path': '/health', 'method': 'GET', 'description': 'Health check'},
+            {'path': '/visits', 'method': 'GET', 'description': 'Visit counter'},
             {'path': '/docs', 'method': 'GET', 'description': 'API documentation'},
             {'path': '/openapi.json', 'method': 'GET', 'description': 'OpenAPI schema'}
         ]
     }
+
+
+@app.get("/visits")
+async def visits() -> Dict[str, Any]:
+    count = _read_visits()
+    return {'visits': count}
 
 
 @app.get("/health")
