@@ -1,0 +1,46 @@
+replicaCount: 5
+
+image:
+  tag: "lab02"
+
+env:
+  - name: PORT
+    value: "5000"
+  - name: APP_RELEASE
+    value: "canary-analysis"
+
+service:
+  type: NodePort
+  port: 80
+  targetPort: 5000
+  nodePort: 30093
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
+
+persistence:
+  enabled: false
+
+rollout:
+  enabled: true
+  strategy: canary
+  canary:
+    steps:
+      - setWeight: 20
+      - pause:
+          duration: 15s
+      - analysis: auto
+      - setWeight: 50
+      - pause:
+          duration: 30s
+      - setWeight: 100
+  analysis:
+    enabled: true
+    interval: 10s
+    count: 3
+    failureLimit: 1
