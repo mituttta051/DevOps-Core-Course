@@ -1,0 +1,38 @@
+replicaCount: 3
+
+image:
+  tag: "lab02"
+
+env:
+  - name: PORT
+    value: "5000"
+  - name: APP_RELEASE
+    value: "bluegreen-v1"
+
+service:
+  type: NodePort
+  port: 80
+  targetPort: 5000
+  nodePort: 30091
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
+
+persistence:
+  enabled: false
+
+rollout:
+  enabled: true
+  strategy: blueGreen
+  blueGreen:
+    autoPromotionEnabled: false
+    autoPromotionSeconds: 0
+    scaleDownDelaySeconds: 30
+    previewService:
+      type: NodePort
+      nodePort: 30092
