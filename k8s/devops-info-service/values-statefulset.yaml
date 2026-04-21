@@ -1,0 +1,31 @@
+replicaCount: 3
+
+image:
+  repository: mituta/devops-info-service
+  tag: "lab12"
+  pullPolicy: IfNotPresent
+
+persistence:
+  enabled: false
+
+rollout:
+  enabled: false
+
+statefulset:
+  enabled: true
+  podManagementPolicy: OrderedReady
+  visitsFile: /data/visits
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
+  persistence:
+    size: 100Mi
+    storageClass: standard
+    accessModes:
+      - ReadWriteOnce
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 5000
