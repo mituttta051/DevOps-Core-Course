@@ -108,3 +108,17 @@ persistence:
   enabled: true
   size: 100Mi
   storageClass: ""
+
+statefulset:
+  enabled: false
+  podManagementPolicy: OrderedReady
+  visitsFile: /data/visits
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
+  persistence:
+    size: 100Mi
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce

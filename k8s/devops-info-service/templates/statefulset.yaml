@@ -1,17 +1,22 @@
-{{- if and (not .Values.rollout.enabled) (not .Values.statefulset.enabled) }}
+{{- if .Values.statefulset.enabled }}
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ include "devops-info-service.fullname" . }}
   labels:
     {{- include "devops-info-service.labels" . | nindent 4 }}
 spec:
+  serviceName: {{ include "devops-info-service.fullname" . }}-headless
   replicas: {{ .Values.replicaCount }}
-  strategy:
-    type: {{ .Values.strategy.type }}
+  podManagementPolicy: {{ .Values.statefulset.podManagementPolicy | default "OrderedReady" }}
+  updateStrategy:
+    {{- if eq .Values.statefulset.updateStrategy.type "RollingUpdate" }}
+    type: RollingUpdate
     rollingUpdate:
-      maxSurge: {{ .Values.strategy.rollingUpdate.maxSurge }}
-      maxUnavailable: {{ .Values.strategy.rollingUpdate.maxUnavailable }}
+      partition: {{ .Values.statefulset.updateStrategy.rollingUpdate.partition | default 0 }}
+    {{- else }}
+    type: {{ .Values.statefulset.updateStrategy.type }}
+    {{- end }}
   selector:
     matchLabels:
       {{- include "devops-info-service.selectorLabels" . | nindent 6 }}
@@ -27,16 +32,6 @@ spec:
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-        {{- if .Values.vault.enabled }}
-        vault.hashicorp.com/agent-inject: "true"
-        vault.hashicorp.com/role: {{ .Values.vault.role | quote }}
-        vault.hashicorp.com/agent-inject-secret-config: {{ .Values.vault.secretPath | quote }}
-        vault.hashicorp.com/agent-inject-template-config: |
-          {{`{{- with secret "`}}{{ .Values.vault.secretPath }}{{`" -}}`}}
-          {{`DATABASE_USERNAME={{ .Data.data.username }}`}}
-          {{`DATABASE_PASSWORD={{ .Data.data.password }}`}}
-          {{`{{- end -}}`}}
-        {{- end }}
     spec:
       serviceAccountName: {{ include "devops-info-service.fullname" . }}
       containers:
@@ -49,6 +44,12 @@ spec:
           env:
             {{- toYaml .Values.env | nindent 12 }}
             {{- include "devops-info-service.envVars" . | nindent 12 }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: VISITS_FILE
+              value: {{ .Values.statefulset.visitsFile | default "/data/visits" | quote }}
           envFrom:
             - secretRef:
                 name: {{ include "devops-info-service.fullname" . }}-secret
@@ -63,17 +64,24 @@ spec:
           volumeMounts:
             - name: config-volume
               mountPath: /config
-            {{- if .Values.persistence.enabled }}
-            - name: data-volume
+            - name: data
               mountPath: /data
-            {{- end }}
       volumes:
         - name: config-volume
           configMap:
             name: {{ include "devops-info-service.fullname" . }}-config
-        {{- if .Values.persistence.enabled }}
-        - name: data-volume
-          persistentVolumeClaim:
-            claimName: {{ include "devops-info-service.fullname" . }}-data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "devops-info-service.labels" . | nindent 10 }}
+      spec:
+        accessModes:
+          {{- toYaml .Values.statefulset.persistence.accessModes | nindent 10 }}
+        resources:
+          requests:
+            storage: {{ .Values.statefulset.persistence.size }}
+        {{- with .Values.statefulset.persistence.storageClass }}
+        storageClassName: {{ . }}
         {{- end }}
 {{- end }}
