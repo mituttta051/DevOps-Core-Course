@@ -109,6 +109,15 @@ persistence:
   size: 100Mi
   storageClass: ""
 
+serviceMonitor:
+  enabled: false
+  namespace: ""
+  path: /metrics
+  interval: 15s
+  scrapeTimeout: 10s
+  labels:
+    release: monitoring
+
 statefulset:
   enabled: false
   podManagementPolicy: OrderedReady
